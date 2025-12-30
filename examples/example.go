@@ -50,5 +50,10 @@ func main() {
 
 	loader.Stop()
 
+	log = golog.New().Prefix("[TEST]", golog.BoldCyan).Timestamp().Representation(true, true).LogFile("./test.log", golog.LogFlushAlways)
+	log.Info("This will be logged to a file!")
+	log.Error("An error occurred!")
+
+
 	log.Panic("Panic!")
 }

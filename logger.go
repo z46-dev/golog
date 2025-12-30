@@ -1,8 +1,20 @@
 package golog
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"time"
+)
+
+const (
+	LogFlushAlways LogFlushMode = iota
+	LogFlushBuffered
+)
+
+const (
+	defaultLogBufferSize    = 64 * 1024
+	defaultLogFlushInterval = 1 * time.Second
 )
 
 func New() (logger *Logger) {
@@ -68,6 +80,43 @@ func (l *Logger) Representation(useSymbol bool, colored bool) (self *Logger) {
 	return
 }
 
+func (l *Logger) LogFile(path string, mode LogFlushMode) (self *Logger) {
+	l.logMu.Lock()
+	defer l.logMu.Unlock()
+
+	l.stopLogFlusherLocked()
+	if l.logWriter != nil {
+		_ = l.logWriter.Flush()
+		l.logWriter = nil
+	}
+	if l.logFile != nil {
+		_ = l.logFile.Close()
+		l.logFile = nil
+	}
+
+	if path == "" {
+		self = l
+		return
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		self = l
+		return
+	}
+
+	l.logFile = file
+	l.logWriter = bufio.NewWriterSize(file, defaultLogBufferSize)
+	l.logFlushMode = mode
+
+	if mode == LogFlushBuffered {
+		l.startLogFlusherLocked()
+	}
+
+	self = l
+	return
+}
+
 func (l *Logger) timestamp() (timestamp string) {
 	timestamp = time.Now().Format("01/02 15:04")
 	return
@@ -111,43 +160,43 @@ func (l *Logger) build(level LogLevel, format string, args ...any) (output strin
 // For each level, create a Level() and a Levelf() method. Level() should terminate with a \n, while Levelf() should not.
 
 func (l *Logger) Debug(message string) {
-	l.printWithSpinner(l.build(LevelDebug, message), true)
+	l.printWithSpinner(LevelDebug, l.build(LevelDebug, message), true)
 }
 
 func (l *Logger) Debugf(format string, args ...any) {
-	l.printWithSpinner(l.build(LevelDebug, format, args...), false)
+	l.printWithSpinner(LevelDebug, l.build(LevelDebug, format, args...), false)
 }
 
 func (l *Logger) Info(message string) {
-	l.printWithSpinner(l.build(LevelInfo, message), true)
+	l.printWithSpinner(LevelInfo, l.build(LevelInfo, message), true)
 }
 
 func (l *Logger) Infof(format string, args ...any) {
-	l.printWithSpinner(l.build(LevelInfo, format, args...), false)
+	l.printWithSpinner(LevelInfo, l.build(LevelInfo, format, args...), false)
 }
 
 func (l *Logger) Warning(message string) {
-	l.printWithSpinner(l.build(LevelWarning, message), true)
+	l.printWithSpinner(LevelWarning, l.build(LevelWarning, message), true)
 }
 
 func (l *Logger) Warningf(format string, args ...any) {
-	l.printWithSpinner(l.build(LevelWarning, format, args...), false)
+	l.printWithSpinner(LevelWarning, l.build(LevelWarning, format, args...), false)
 }
 
 func (l *Logger) Error(message string) {
-	l.printWithSpinner(l.build(LevelError, message), true)
+	l.printWithSpinner(LevelError, l.build(LevelError, message), true)
 }
 
 func (l *Logger) Errorf(format string, args ...any) {
-	l.printWithSpinner(l.build(LevelError, format, args...), false)
+	l.printWithSpinner(LevelError, l.build(LevelError, format, args...), false)
 }
 
 func (l *Logger) Fatal(message string) {
-	l.printWithSpinner(l.build(LevelFatal, message), true)
+	l.printWithSpinner(LevelFatal, l.build(LevelFatal, message), true)
 }
 
 func (l *Logger) Fatalf(format string, args ...any) {
-	l.printWithSpinner(l.build(LevelFatal, format, args...), false)
+	l.printWithSpinner(LevelFatal, l.build(LevelFatal, format, args...), false)
 }
 
 func (l *Logger) Panic(message string) {
@@ -158,7 +207,9 @@ func (l *Logger) Panicf(format string, args ...any) {
 	panic(l.build(LevelFatal, format, args...))
 }
 
-func (l *Logger) printWithSpinner(output string, newline bool) {
+func (l *Logger) printWithSpinner(level LogLevel, output string, newline bool) {
+	l.writeLogFile(level, output, newline)
+
 	if ld := l.loader; ld != nil && ld.isRunning() {
 		ld.mu.Lock()
 		ld.paused = true
@@ -270,4 +321,86 @@ func buildLoaderBar(progress float64, pattern LoaderPattern) string {
 	}
 
 	return string(bar)
+}
+
+func (l *Logger) writeLogFile(level LogLevel, output string, newline bool) {
+	l.logMu.Lock()
+	defer l.logMu.Unlock()
+
+	if l.logWriter == nil {
+		return
+	}
+
+	output = stripAnsi(output)
+	if newline {
+		output += "\n"
+	}
+
+	_, _ = l.logWriter.WriteString(output)
+
+	if l.logFlushMode == LogFlushAlways || level >= LevelWarning {
+		_ = l.logWriter.Flush()
+	}
+}
+
+func stripAnsi(input string) string {
+	// Remove ANSI escape sequences (e.g., color codes) from log output.
+	out := make([]byte, 0, len(input))
+	for i := 0; i < len(input); i++ {
+		if input[i] != 0x1b || i+1 >= len(input) || input[i+1] != '[' {
+			out = append(out, input[i])
+			continue
+		}
+
+		j := i + 2
+		for ; j < len(input); j++ {
+			b := input[j]
+			if b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' {
+				break
+			}
+		}
+
+		if j >= len(input) {
+			break
+		}
+
+		i = j
+	}
+
+	return string(out)
+}
+
+func (l *Logger) startLogFlusherLocked() {
+	if l.logFlushStop != nil {
+		return
+	}
+
+	l.logFlushStop = make(chan struct{})
+	stop := l.logFlushStop
+
+	go func() {
+		ticker := time.NewTicker(defaultLogFlushInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				l.logMu.Lock()
+				if l.logWriter != nil {
+					_ = l.logWriter.Flush()
+				}
+				l.logMu.Unlock()
+			}
+		}
+	}()
+}
+
+func (l *Logger) stopLogFlusherLocked() {
+	if l.logFlushStop == nil {
+		return
+	}
+
+	close(l.logFlushStop)
+	l.logFlushStop = nil
 }

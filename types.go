@@ -1,11 +1,17 @@
 package golog
 
-import "sync"
+import (
+	"bufio"
+	"os"
+	"sync"
+)
 
 type (
 	LogLevel uint8 // LogLevel represents the level of the log message.
 
 	ColorCode string // colorCode represents the color code for the logger output.
+
+	LogFlushMode uint8 // LogFlushMode controls how log file writes are flushed.
 
 	SpinnerType uint8 // SpinnerType represents the type of spinner to use.
 	LoaderType  uint8 // LoaderType represents the type of loader to use.
@@ -21,6 +27,11 @@ type (
 		levelWithSymbol, levelWithColor bool
 		spinner                         *Spinner
 		loader                          *Loader
+		logFile                         *os.File
+		logWriter                       *bufio.Writer
+		logFlushMode                    LogFlushMode
+		logFlushStop                    chan struct{}
+		logMu                           sync.Mutex
 	} // Logger is a struct that represents a logger with various configurations.
 
 	Spinner struct {
