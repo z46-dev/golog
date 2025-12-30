@@ -13,6 +13,8 @@ type (
 
 	LogFlushMode uint8 // LogFlushMode controls how log file writes are flushed.
 
+	TimestampPrecision uint8 // TimestampPrecision represents the precision for timestamps.
+
 	SpinnerType uint8 // SpinnerType represents the type of spinner to use.
 	LoaderType  uint8 // LoaderType represents the type of loader to use.
 
@@ -25,6 +27,7 @@ type (
 		prefix                          string
 		color                           ColorCode
 		levelWithSymbol, levelWithColor bool
+		timestampPrecision              TimestampPrecision
 		spinner                         *Spinner
 		loader                          *Loader
 		logFile                         *os.File

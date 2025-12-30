@@ -18,14 +18,23 @@ const (
 	defaultLogFlushInterval = 1 * time.Second
 )
 
+const (
+	PrecisionMinute TimestampPrecision = iota
+	PrecisionSecond
+	PrecisionMillisecond
+	PrecisionMicrosecond
+	PrecisionNanosecond
+)
+
 func New() (logger *Logger) {
 	logger = &Logger{
-		hasPrefix:        false,
-		includeTimestamp: false,
-		prefix:           "",
-		color:            White,
-		levelWithSymbol:  false,
-		levelWithColor:   true,
+		hasPrefix:          false,
+		includeTimestamp:   false,
+		prefix:             "",
+		color:              White,
+		levelWithSymbol:    false,
+		levelWithColor:     true,
+		timestampPrecision: PrecisionMinute,
 	}
 
 	return
@@ -64,6 +73,12 @@ func (l *Logger) ClearPrefix() (self *Logger) {
 
 func (l *Logger) Timestamp() (self *Logger) {
 	l.includeTimestamp = true
+	self = l
+	return
+}
+
+func (l *Logger) Precision(precision TimestampPrecision) (self *Logger) {
+	l.timestampPrecision = precision
 	self = l
 	return
 }
@@ -127,7 +142,21 @@ func (l *Logger) LogFile(path string, mode LogFlushMode) (self *Logger) {
 }
 
 func (l *Logger) timestamp() (timestamp string) {
-	timestamp = time.Now().Format("01/02 15:04")
+	var format string
+	switch l.timestampPrecision {
+	case PrecisionSecond:
+		format = "01/02 15:04:05"
+	case PrecisionMillisecond:
+		format = "01/02 15:04:05.000"
+	case PrecisionMicrosecond:
+		format = "01/02 15:04:05.000000"
+	case PrecisionNanosecond:
+		format = "01/02 15:04:05.000000000"
+	default:
+		format = "01/02 15:04"
+	}
+
+	timestamp = time.Now().Format(format)
 	return
 }
 
