@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -97,6 +98,14 @@ func (l *Logger) LogFile(path string, mode LogFlushMode) (self *Logger) {
 	if path == "" {
 		self = l
 		return
+	}
+
+	dir := filepath.Dir(path)
+	if dir != "." {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			self = l
+			return
+		}
 	}
 
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
