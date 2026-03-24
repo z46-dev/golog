@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func newSpinner(message string, spinnerType SpinnerType, tps int, logger *Logger) (spinner *Spinner) {
+func newSpinner(message string, spinnerType SpinnerType, tps int, logger *Logger, host *Logger) (spinner *Spinner) {
 	spinner = &Spinner{
 		message:     message,
 		tick:        0,
@@ -16,6 +16,7 @@ func newSpinner(message string, spinnerType SpinnerType, tps int, logger *Logger
 		done:        nil,
 		running:     false,
 		logger:      logger,
+		host:        host,
 	}
 
 	if len(spinner.frames) == 0 {
@@ -37,9 +38,9 @@ func (s *Spinner) Start() {
 	s.tick = 0
 	s.running = true
 
-	if s.logger != nil {
-		s.logger.spinner = s
-		s.logger.loader = nil
+	if s.host != nil {
+		s.host.spinner = s
+		s.host.loader = nil
 	}
 
 	s.mu.Unlock()
@@ -55,8 +56,8 @@ func (s *Spinner) Start() {
 				s.mu.Lock()
 				s.running = false
 				s.paused = false
-				if s.logger != nil {
-					s.logger.spinner = nil
+				if s.host != nil {
+					s.host.spinner = nil
 				}
 				s.mu.Unlock()
 				return

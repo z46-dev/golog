@@ -28,6 +28,7 @@ type (
 		color                           ColorCode
 		levelWithSymbol, levelWithColor bool
 		timestampPrecision              TimestampPrecision
+		parent                          *Logger
 		spinner                         *Spinner
 		loader                          *Loader
 		logFile                         *os.File
@@ -48,6 +49,7 @@ type (
 		paused      bool
 		mu          sync.Mutex
 		logger      *Logger
+		host        *Logger
 	} // Spinner is a struct that represents a spinner with a message, tick interval, and ticks per second (tps).
 
 	LoaderPattern struct {
@@ -68,5 +70,6 @@ type (
 		paused   bool
 		mu       sync.Mutex
 		logger   *Logger
+		host     *Logger
 	} // Loader is a struct that represents a loader with a message, progress, ticks per second (tps), and pattern.
 )

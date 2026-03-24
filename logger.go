@@ -40,18 +40,33 @@ func New() (logger *Logger) {
 	return
 }
 
+func (l *Logger) SpawnChild() (child *Logger) {
+	child = New()
+	child.parent = l
+	return
+}
+
+func (l *Logger) outputLogger() (output *Logger) {
+	output = l
+	for output.parent != nil {
+		output = output.parent
+	}
+
+	return
+}
+
 func (l *Logger) Builder() (builder *Builder) {
 	builder = newBuilder()
 	return
 }
 
 func (l *Logger) Spinner(message string, spinnerType SpinnerType, tps int) (spinner *Spinner) {
-	spinner = newSpinner(message, spinnerType, tps, l)
+	spinner = newSpinner(message, spinnerType, tps, l, l.outputLogger())
 	return
 }
 
 func (l *Logger) Loader(message string, loaderType LoaderType, tps int) (loader *Loader) {
-	loader = newLoader(message, loaderType, tps, l)
+	loader = newLoader(message, loaderType, tps, l, l.outputLogger())
 	return
 }
 
@@ -97,6 +112,12 @@ func (l *Logger) Representation(useSymbol bool, colored bool) (self *Logger) {
 }
 
 func (l *Logger) LogFile(path string, mode LogFlushMode) (self *Logger) {
+	if l.parent != nil {
+		l.outputLogger().LogFile(path, mode)
+		self = l
+		return
+	}
+
 	l.logMu.Lock()
 	defer l.logMu.Unlock()
 
@@ -195,53 +216,83 @@ func (l *Logger) build(level LogLevel, format string, args ...any) (output strin
 	return
 }
 
+func (l *Logger) localFormat(format string, args ...any) (output string) {
+	output = fmt.Sprintf(format, args...)
+
+	prefix := l.spinnerPrefix()
+	if prefix == "" {
+		return output
+	}
+
+	return prefix + output
+}
+
+func (l *Logger) logf(level LogLevel, newline bool, format string, args ...any) {
+	if l.parent != nil {
+		l.parent.logf(level, newline, "%s", l.localFormat(format, args...))
+		return
+	}
+
+	l.printWithSpinner(level, l.build(level, format, args...), newline)
+}
+
 // For each level, create a Level() and a Levelf() method. Level() should terminate with a \n, while Levelf() should not.
 
 func (l *Logger) Debug(message string) {
-	l.printWithSpinner(LevelDebug, l.build(LevelDebug, message), true)
+	l.logf(LevelDebug, true, "%s", message)
 }
 
 func (l *Logger) Debugf(format string, args ...any) {
-	l.printWithSpinner(LevelDebug, l.build(LevelDebug, format, args...), false)
+	l.logf(LevelDebug, false, format, args...)
 }
 
 func (l *Logger) Info(message string) {
-	l.printWithSpinner(LevelInfo, l.build(LevelInfo, message), true)
+	l.logf(LevelInfo, true, "%s", message)
 }
 
 func (l *Logger) Infof(format string, args ...any) {
-	l.printWithSpinner(LevelInfo, l.build(LevelInfo, format, args...), false)
+	l.logf(LevelInfo, false, format, args...)
 }
 
 func (l *Logger) Warning(message string) {
-	l.printWithSpinner(LevelWarning, l.build(LevelWarning, message), true)
+	l.logf(LevelWarning, true, "%s", message)
 }
 
 func (l *Logger) Warningf(format string, args ...any) {
-	l.printWithSpinner(LevelWarning, l.build(LevelWarning, format, args...), false)
+	l.logf(LevelWarning, false, format, args...)
 }
 
 func (l *Logger) Error(message string) {
-	l.printWithSpinner(LevelError, l.build(LevelError, message), true)
+	l.logf(LevelError, true, "%s", message)
 }
 
 func (l *Logger) Errorf(format string, args ...any) {
-	l.printWithSpinner(LevelError, l.build(LevelError, format, args...), false)
+	l.logf(LevelError, false, format, args...)
 }
 
 func (l *Logger) Fatal(message string) {
-	l.printWithSpinner(LevelFatal, l.build(LevelFatal, message), true)
+	l.logf(LevelFatal, true, "%s", message)
 }
 
 func (l *Logger) Fatalf(format string, args ...any) {
-	l.printWithSpinner(LevelFatal, l.build(LevelFatal, format, args...), false)
+	l.logf(LevelFatal, false, format, args...)
 }
 
 func (l *Logger) Panic(message string) {
-	panic(l.build(LevelFatal, message))
+	if l.parent != nil {
+		l.parent.Panic(l.localFormat("%s", message))
+		return
+	}
+
+	panic(l.build(LevelFatal, "%s", message))
 }
 
 func (l *Logger) Panicf(format string, args ...any) {
+	if l.parent != nil {
+		l.parent.Panic(l.localFormat(format, args...))
+		return
+	}
+
 	panic(l.build(LevelFatal, format, args...))
 }
 

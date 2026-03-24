@@ -8,12 +8,15 @@ import (
 
 func main() {
 	var log *golog.Logger = golog.New().Prefix("[TEST]", golog.BoldBlue).Timestamp().Representation(false, true)
+	var sLog *golog.Logger = log.SpawnChild().Prefix("[CHILD]", golog.BoldGreen)
 
 	log.Info("Hello, world!")
+	sLog.Info("Hello from the child logger!")
 	log.Debug(log.Builder().C(golog.Red).A("Hello").R().A(", ").C(golog.Blue).A("world").R().A("!").B())
 	log.Info(log.Builder().ThemeColors("Hello, world!", golog.RainbowTheme).B())
 	log.Info(log.Builder().ThemeColors("Hello, world!", golog.BoldRainbowTheme).B())
 	log.Info(log.Builder().ThemeColors("Hello, world!", golog.RainbowBackgroundTheme).B())
+	log.Info(log.Builder().ThemeColors("USA", []golog.ColorCode{golog.BoldRed, golog.BoldWhite, golog.BoldBlue}).B())
 
 	var spinner *golog.Spinner = log.Spinner("Loading...", golog.SpinnerRunner, 5)
 	spinner.Start()
@@ -53,7 +56,6 @@ func main() {
 	log = golog.New().Prefix("[TEST]", golog.BoldCyan).Timestamp().Representation(true, true).LogFile("./test.log", golog.LogFlushAlways)
 	log.Info("This will be logged to a file!")
 	log.Error("An error occurred!")
-
 
 	log.Panic("Panic!")
 }

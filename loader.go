@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func newLoader(message string, loaderType LoaderType, tps int, logger *Logger) *Loader {
+func newLoader(message string, loaderType LoaderType, tps int, logger *Logger, host *Logger) *Loader {
 	pattern, ok := loaders[loaderType]
 	if !ok {
 		pattern = LoaderPattern{Width: 20, Fill: '=', Arrow: '>', Empty: ' '}
@@ -22,6 +22,7 @@ func newLoader(message string, loaderType LoaderType, tps int, logger *Logger) *
 		stop:     nil,
 		done:     nil,
 		logger:   logger,
+		host:     host,
 	}
 }
 
@@ -37,9 +38,9 @@ func (l *Loader) Start() {
 	l.running = true
 	l.paused = false
 	interval := time.Second / time.Duration(l.tps)
-	if l.logger != nil {
-		l.logger.loader = l
-		l.logger.spinner = nil
+	if l.host != nil {
+		l.host.loader = l
+		l.host.spinner = nil
 	}
 	l.mu.Unlock()
 
@@ -54,8 +55,8 @@ func (l *Loader) Start() {
 				l.mu.Lock()
 				l.running = false
 				l.paused = false
-				if l.logger != nil {
-					l.logger.loader = nil
+				if l.host != nil {
+					l.host.loader = nil
 				}
 				l.mu.Unlock()
 				return
