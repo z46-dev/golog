@@ -181,8 +181,8 @@ func (l *Logger) timestamp() (timestamp string) {
 	return
 }
 
-func (l *Logger) build(level LogLevel, format string, args ...any) (output string) {
-	format = "%s[%s]%s " + format
+func (l *Logger) levelPrefix(level LogLevel) (output string) {
+	format := "%s[%s]%s "
 
 	var (
 		levelText  string
@@ -199,7 +199,13 @@ func (l *Logger) build(level LogLevel, format string, args ...any) (output strin
 		levelColor = levelColors[level]
 	}
 
-	args = append([]any{levelColor, levelText, Reset}, args...)
+	output = fmt.Sprintf(format, levelColor, levelText, Reset)
+	return
+}
+
+func (l *Logger) localPrefix() (output string) {
+	format := ""
+	var args []any
 
 	if l.hasPrefix {
 		format = "%s%s%s " + format
@@ -211,29 +217,40 @@ func (l *Logger) build(level LogLevel, format string, args ...any) (output strin
 		args = append([]any{White, l.timestamp(), Reset}, args...)
 	}
 
-	// fmt.Printf(format, args...)
+	if format == "" {
+		return ""
+	}
+
+	// Ensure we always end with a reset so colors do not leak into the rest of the line.
+	format += "%s"
+	args = append(args, Reset)
+
 	output = fmt.Sprintf(format, args...)
 	return
 }
 
-func (l *Logger) localFormat(format string, args ...any) (output string) {
-	output = fmt.Sprintf(format, args...)
-
-	prefix := l.spinnerPrefix()
-	if prefix == "" {
-		return output
+func (l *Logger) inheritedPrefix(root *Logger) (output string) {
+	if l == nil || l == root {
+		return ""
 	}
 
-	return prefix + output
+	if l.parent != nil {
+		output = l.parent.inheritedPrefix(root)
+	}
+
+	output += l.localPrefix()
+	return
+}
+
+func (l *Logger) build(level LogLevel, inheritedPrefix string, format string, args ...any) (output string) {
+	output = l.localPrefix() + inheritedPrefix + l.levelPrefix(level) + fmt.Sprintf(format, args...)
+	return
 }
 
 func (l *Logger) logf(level LogLevel, newline bool, format string, args ...any) {
-	if l.parent != nil {
-		l.parent.logf(level, newline, "%s", l.localFormat(format, args...))
-		return
-	}
-
-	l.printWithSpinner(level, l.build(level, format, args...), newline)
+	root := l.outputLogger()
+	inheritedPrefix := l.inheritedPrefix(root)
+	root.printWithSpinner(level, root.build(level, inheritedPrefix, format, args...), newline)
 }
 
 // For each level, create a Level() and a Levelf() method. Level() should terminate with a \n, while Levelf() should not.
@@ -279,21 +296,13 @@ func (l *Logger) Fatalf(format string, args ...any) {
 }
 
 func (l *Logger) Panic(message string) {
-	if l.parent != nil {
-		l.parent.Panic(l.localFormat("%s", message))
-		return
-	}
-
-	panic(l.build(LevelFatal, "%s", message))
+	root := l.outputLogger()
+	panic(root.build(LevelFatal, l.inheritedPrefix(root), "%s", message))
 }
 
 func (l *Logger) Panicf(format string, args ...any) {
-	if l.parent != nil {
-		l.parent.Panic(l.localFormat(format, args...))
-		return
-	}
-
-	panic(l.build(LevelFatal, format, args...))
+	root := l.outputLogger()
+	panic(root.build(LevelFatal, l.inheritedPrefix(root), format, args...))
 }
 
 func (l *Logger) printWithSpinner(level LogLevel, output string, newline bool) {
@@ -357,30 +366,9 @@ func (l *Logger) printWithSpinner(level LogLevel, output string, newline bool) {
 	}
 }
 
-// spinnerPrefix builds the prefix (timestamp, custom prefix) without level.
+// spinnerPrefix builds the full prefix chain (timestamp, custom prefixes) without level.
 func (l *Logger) spinnerPrefix() string {
-	format := ""
-	var args []any
-
-	if l.hasPrefix {
-		format = "%s%s%s " + format
-		args = append([]any{l.color, l.prefix, Reset}, args...)
-	}
-
-	if l.includeTimestamp {
-		format = "[%s%s%s] " + format
-		args = append([]any{White, l.timestamp(), Reset}, args...)
-	}
-
-	if format == "" {
-		return ""
-	}
-
-	// Ensure we always end with a reset so spinner colors don't leak.
-	format += "%s"
-	args = append(args, Reset)
-
-	return fmt.Sprintf(format, args...)
+	return l.outputLogger().localPrefix() + l.inheritedPrefix(l.outputLogger())
 }
 
 func buildLoaderBar(progress float64, pattern LoaderPattern) string {
