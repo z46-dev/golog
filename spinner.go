@@ -26,11 +26,11 @@ func newSpinner(message string, spinnerType SpinnerType, tps int, logger *Logger
 	return
 }
 
-func (s *Spinner) Start() {
+func (s *Spinner) Start() *Spinner {
 	s.mu.Lock()
 	if s.running {
 		s.mu.Unlock()
-		return
+		return s
 	}
 
 	s.stop = make(chan struct{})
@@ -66,13 +66,14 @@ func (s *Spinner) Start() {
 			}
 		}
 	}()
+	return s
 }
 
-func (s *Spinner) Stop() {
+func (s *Spinner) Stop() *Spinner {
 	s.mu.Lock()
 	if !s.running {
 		s.mu.Unlock()
-		return
+		return s
 	}
 
 	close(s.stop)
@@ -81,19 +82,32 @@ func (s *Spinner) Stop() {
 
 	<-done
 	clearSpinnerLine()
+	return s
+}
+
+// SetMessage updates the text shown beside the spinner.
+func (s *Spinner) SetMessage(message string) *Spinner {
+	s.mu.Lock()
+	s.message = message
+	running := s.running && !s.paused
+	s.mu.Unlock()
+
+	if running {
+		s.render()
+	}
+	return s
 }
 
 func (s *Spinner) render() {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.running || s.paused {
-		s.mu.Unlock()
 		return
 	}
 
 	var frame rune = s.frames[s.tick%len(s.frames)]
 	s.tick++
 	var logger *Logger = s.logger
-	s.mu.Unlock()
 
 	clearSpinnerLine()
 	if logger != nil {

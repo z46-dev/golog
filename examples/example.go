@@ -22,6 +22,7 @@ func main() {
 	spinner.Start()
 
 	log.Warning("One")
+	spinner.SetMessage("Working through the next step...")
 	time.Sleep(2 * time.Second)
 
 	log.Error("Two")
@@ -42,6 +43,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	log.Info("Still thinking...")
+	loader.SetMessage("Halfway there...")
 	loader.SetProgress(0.5)
 
 	time.Sleep(2 * time.Second)

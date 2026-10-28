@@ -19,6 +19,10 @@ const (
 
 const (
 	LoaderBar LoaderType = iota
+	LoaderBarNoArrow
+	LoaderBlocks
+	LoaderDots
+	LoaderASCII
 )
 
 var spinners = map[SpinnerType][]rune{
@@ -60,5 +64,29 @@ var loaders = map[LoaderType]LoaderPattern{
 		Fill:  '=',
 		Arrow: '>',
 		Empty: ' ',
+	},
+	LoaderBarNoArrow: {
+		Width: 20,
+		Fill:  '=',
+		Arrow: '=',
+		Empty: ' ',
+	},
+	LoaderBlocks: {
+		Width: 20,
+		Fill:  '█',
+		Arrow: '▌',
+		Empty: '░',
+	},
+	LoaderDots: {
+		Width: 20,
+		Fill:  '●',
+		Arrow: '◉',
+		Empty: '○',
+	},
+	LoaderASCII: {
+		Width: 20,
+		Fill:  '#',
+		Arrow: '>',
+		Empty: '-',
 	},
 }

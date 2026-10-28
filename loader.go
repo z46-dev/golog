@@ -26,11 +26,11 @@ func newLoader(message string, loaderType LoaderType, tps int, logger *Logger, h
 	}
 }
 
-func (l *Loader) Start() {
+func (l *Loader) Start() *Loader {
 	l.mu.Lock()
 	if l.running {
 		l.mu.Unlock()
-		return
+		return l
 	}
 
 	l.stop = make(chan struct{})
@@ -65,13 +65,14 @@ func (l *Loader) Start() {
 			}
 		}
 	}()
+	return l
 }
 
-func (l *Loader) Stop() {
+func (l *Loader) Stop() *Loader {
 	l.mu.Lock()
 	if !l.running {
 		l.mu.Unlock()
-		return
+		return l
 	}
 	close(l.stop)
 	done := l.done
@@ -79,9 +80,10 @@ func (l *Loader) Stop() {
 
 	<-done
 	clearSpinnerLine()
+	return l
 }
 
-func (l *Loader) SetProgress(progress float64) {
+func (l *Loader) SetProgress(progress float64) *Loader {
 	l.mu.Lock()
 	if progress < 0 {
 		progress = 0
@@ -96,19 +98,32 @@ func (l *Loader) SetProgress(progress float64) {
 	if running {
 		l.render()
 	}
+	return l
+}
+
+// SetMessage updates the text shown beside the loader.
+func (l *Loader) SetMessage(message string) *Loader {
+	l.mu.Lock()
+	l.message = message
+	running := l.running && !l.paused
+	l.mu.Unlock()
+
+	if running {
+		l.render()
+	}
+	return l
 }
 
 func (l *Loader) render() {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	if !l.running || l.paused {
-		l.mu.Unlock()
 		return
 	}
 
 	progress := l.progress
 	pattern := l.pattern
 	logger := l.logger
-	l.mu.Unlock()
 
 	clearSpinnerLine()
 	bar := buildLoaderBar(progress, pattern)
